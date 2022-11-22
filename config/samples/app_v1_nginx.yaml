@@ -1,0 +1,12 @@
+apiVersion: app.siji.io/v1
+kind: Nginx
+metadata:
+  labels:
+    app.kubernetes.io/name: nginx
+    app.kubernetes.io/instance: nginx-sample
+    app.kubernetes.io/part-of: k8s-operator
+    app.kuberentes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: k8s-operator
+  name: nginx-sample
+spec:
+  # TODO(user): Add fields here
