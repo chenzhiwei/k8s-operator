@@ -18,8 +18,16 @@ package controllers
 
 import (
 	"context"
+	"os"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -49,9 +57,60 @@ type NginxReconciler struct {
 func (r *NginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	cs := clientSet("")
+
+	listOpts := []client.ListOption{
+		client.InNamespace("default"),
+	}
+
+	deployList := &appsv1.DeploymentList{}
+	if err := r.List(ctx, deployList, listOpts...); err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, deploy := range deployList.Items {
+		deploy.Spec.Replicas = int2ptr(0)
+		cs.AppsV1().Deployments(deploy.Namespace).Create(ctx, &deploy, metav1.CreateOptions{})
+	}
+
+	serviceList := &corev1.ServiceList{}
+	if err := r.List(ctx, serviceList, listOpts...); err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, service := range serviceList.Items {
+		cs.CoreV1().Services(service.Namespace).Create(ctx, &service, metav1.CreateOptions{})
+	}
+
+	ingressList := &netv1.IngressList{}
+	if err := r.List(ctx, ingressList, listOpts...); err != nil {
+	}
+	for _, ingress := range ingressList.Items {
+		cs.NetworkingV1().Ingresses(ingress.Namespace).Create(ctx, &ingress, metav1.CreateOptions{})
+	}
+
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	if err := r.List(ctx, pvcList, listOpts...); err != nil {
+	}
+	for _, pvc := range pvcList.Items {
+		pv := &corev1.PersistentVolume{}
+		pvName := pvc.Spec.VolumeName
+		if err := r.Get(ctx, types.NamespacedName{Name: pvName}, pv); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
+}
+
+func int2ptr(i int32) *int32 {
+	return &i
+}
+
+func clientSet(kc string) *kubernetes.Clientset {
+	kcPath := "/tmp/kubeconfig"
+	os.WriteFile(kcPath, []byte(kc), 0644)
+	config, _ := clientcmd.BuildConfigFromFlags("", kcPath)
+	cs, _ := kubernetes.NewForConfig(config)
+	return cs
 }
 
 // SetupWithManager sets up the controller with the Manager.
